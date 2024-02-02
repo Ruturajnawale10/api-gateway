@@ -136,6 +136,7 @@ func main() {
 	}
 
 	gmux := mux.NewRouter()
+	gmux.Path("/signin").HandlerFunc(signInUser).Methods("POST")
 
 	for _, route := range gatewayConfig.Routes {
 		backendURL, err := url.Parse(route.Target)
@@ -143,7 +144,7 @@ func main() {
 			log.Fatal("Error parsing backend URL:", err)
 		}
 
-		gmux.PathPrefix("/").Handler(gatewayHandler(backendURL))
+		gmux.PathPrefix(route.Context).Handler(gatewayHandler(backendURL))
 	}
 
 	log.Printf("Starting smart reverse proxy on [%s]", gatewayConfig.ListenAddr)
