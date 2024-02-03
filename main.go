@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gomodule/redigo/redis"
+	"github.com/gorilla/context"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
 )
@@ -147,9 +148,41 @@ func main() {
 		gmux.PathPrefix(route.Context).Handler(gatewayHandler(backendURL))
 	}
 
-	log.Printf("Starting smart reverse proxy on [%s]", gatewayConfig.ListenAddr)
-	if err := http.ListenAndServe(gatewayConfig.ListenAddr, limitMiddleware(gmux)); err != nil {
+	// JWT Verification Middleware
+	jwtMiddleware := func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Extract JWT token from request header or query parameter
+			tokenString := r.Header.Get("Authorization")
+			if tokenString == "" {
+				// Token not found, return error response
+				http.Error(w, "Authorization token not found", http.StatusUnauthorized)
+				return
+			}
+
+			// Verify JWT token
+			claims, err := verifyToken(tokenString)
+			if err != nil {
+				// Token verification failed, return error response
+				fmt.Println("Error verifying token:", err.Error())
+				http.Error(w, "Invalid token", http.StatusUnauthorized)
+				return
+			}
+
+			fmt.Println("Token verified successfully:", claims)
+
+			// Add claims to request context for further processing
+			context.Set(r, "userClaims", claims)
+
+			// Proceed to the next handler
+			next.ServeHTTP(w, r)
+		})
+	}
+
+	// Middleware chain: JWT Verification -> Rate Limiting
+	middlewareChain := limitMiddleware(jwtMiddleware(gmux))
+
+	// Use middleware chain with the router
+	if err := http.ListenAndServe(gatewayConfig.ListenAddr, middlewareChain); err != nil {
 		log.Fatalf("Unable to start server: %s", err.Error())
 	}
-	return
 }
