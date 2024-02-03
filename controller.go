@@ -38,6 +38,14 @@ func signInUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Println("Found a record: ", result)
-	json.NewEncoder(w).Encode(http.StatusOK)
+	tokenString, err := createToken(user.UserName)
+	if err != nil {
+		fmt.Println("No username found")
+		w.WriteHeader(http.StatusInternalServerError)
+
+	}
+	fmt.Println("User authenticated successfully")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, tokenString)
+	return
 }
